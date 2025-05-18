@@ -1,40 +1,116 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet, View } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet } from "react-native";
+import { useAuth } from "@/context/AuthContext";
+import { Redirect, useRouter } from "expo-router";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  getDoc,
+} from "firebase/firestore";
+import { db } from "@/utils/firebaseConfig";
+import { useEffect, useState } from "react";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { Redirect } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
+type Conversation = {
+  id: string;
+  participants: string[];
+  otherUser: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    username?: string;
+  };
+};
 
 export default function HomeScreen() {
-   const { user } = useAuth();
+  const { user } = useAuth();
+  const router = useRouter();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
 
-  if (!user) {
-    return <Redirect href="/login" />;
-  }
+  if (!user) return <Redirect href="/login" />;
+
+  useEffect(() => {
+    const fetchConversations = async () => {
+      const q = query(
+        collection(db, "conversations"),
+        where("participants", "array-contains", user.uid)
+      );
+
+      const snapshot = await getDocs(q);
+      const fetched: Conversation[] = [];
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const otherUserId = data.participants.find((uid: string) => uid !== user.uid);
+        if (!otherUserId) continue;
+
+        const userDoc = await getDoc(doc(db, "users", otherUserId));
+        const otherUser = userDoc.exists()
+          ? { id: userDoc.id, ...userDoc.data() }
+          : { id: otherUserId };
+
+        fetched.push({
+          id: docSnap.id,
+          participants: data.participants,
+          otherUser,
+        });
+      }
+
+      setConversations(fetched);
+    };
+
+    fetchConversations();
+  }, [user]);
 
   return (
-   <View></View>
+    <View style={{ flex: 1, padding: 16 }}>
+      <Text style={styles.header}>Sohbetlerim</Text>
+
+      <FlatList
+        data={conversations}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() =>
+              router.push({
+                pathname: "/chat",
+                params: {
+                  conversationId: item.id,
+                  userId: item.otherUser.id,
+                },
+              })
+            }
+          >
+            <Text style={styles.nameText}>
+              {item.otherUser.firstName} {item.otherUser.lastName}
+            </Text>
+            <Text style={styles.usernameText}>@{item.otherUser.username}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  header: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 12,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  item: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: "#ccc",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  nameText: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  usernameText: {
+    fontSize: 14,
+    color: "gray",
   },
 });
