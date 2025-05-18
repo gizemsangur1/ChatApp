@@ -1,8 +1,9 @@
 import { View, Text, FlatList, TouchableOpacity } from "react-native";
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
 import { db } from "@/utils/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from 'expo-router';
 
 type UserItem = {
   id: string;
@@ -11,9 +12,10 @@ type UserItem = {
   lastName?: string;
 };
 
-export default function UsersScreen({ navigation }: any) {
+export default function UsersScreen() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const { user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (!user) return;
@@ -29,6 +31,30 @@ export default function UsersScreen({ navigation }: any) {
     fetchUsers();
   }, [user]);
 
+  const startConversation = async (currentUserId: string, selectedUserId: string) => {
+    const q = query(
+      collection(db, "conversations"),
+      where("participants", "array-contains", currentUserId)
+    );
+    const snapshot = await getDocs(q);
+
+    const existing = snapshot.docs.find(doc => {
+      const participants = doc.data().participants;
+      return participants.includes(selectedUserId);
+    });
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const newConv = await addDoc(collection(db, "conversations"), {
+      participants: [currentUserId, selectedUserId],
+      createdAt: Date.now(),
+    });
+
+    return newConv.id;
+  };
+
   return (
     <View style={{ flex: 1, padding: 16 }}>
       <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 12 }}>
@@ -39,14 +65,24 @@ export default function UsersScreen({ navigation }: any) {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TouchableOpacity
-            onPress={() => navigation.navigate("chat", { user: item })}
+            onPress={async () => {
+              if (!user?.uid) return;
+              const conversationId = await startConversation(user.uid, item.id);
+              router.push({
+                pathname: "/chat",
+                params: {
+                  conversationId,
+                  userId: item.id,
+                },
+              });
+            }}
             style={{
               padding: 12,
               borderBottomWidth: 1,
               borderColor: "#ccc",
             }}
           >
-            <Text>{item?.firstName+" "+ item?.lastName}</Text>
+            <Text>{item.firstName + " " + item.lastName}</Text>
           </TouchableOpacity>
         )}
       />
