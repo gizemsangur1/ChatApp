@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { register } from "../../utils/authService";
+import { register } from "../../authService";
 
 export default function RegisterScreen() {
   const router = useRouter();

@@ -1,15 +1,16 @@
 import { View, Text, FlatList, TouchableOpacity } from "react-native";
 import { useEffect, useState } from "react";
 import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
-import { db } from "@/utils/firebaseConfig";
+import { db } from "@/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from 'expo-router';
+import { useRouter } from "expo-router";
 
 type UserItem = {
   id: string;
   email: string;
   firstName?: string;
   lastName?: string;
+  photoURL?: string;
 };
 
 export default function UsersScreen() {
@@ -31,14 +32,17 @@ export default function UsersScreen() {
     fetchUsers();
   }, [user]);
 
-  const startConversation = async (currentUserId: string, selectedUserId: string) => {
+  const startConversation = async (
+    currentUserId: string,
+    selectedUserId: string
+  ) => {
     const q = query(
       collection(db, "conversations"),
       where("participants", "array-contains", currentUserId)
     );
     const snapshot = await getDocs(q);
 
-    const existing = snapshot.docs.find(doc => {
+    const existing = snapshot.docs.find((doc) => {
       const participants = doc.data().participants;
       return participants.includes(selectedUserId);
     });

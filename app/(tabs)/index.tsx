@@ -1,16 +1,16 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet } from "react-native";
 import { useAuth } from "@/context/AuthContext";
+import { db } from "@/firebaseConfig";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   query,
   where,
-  doc,
-  getDoc,
 } from "firebase/firestore";
-import { db } from "@/utils/firebaseConfig";
 import { useEffect, useState } from "react";
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 type Conversation = {
   id: string;
@@ -75,7 +75,7 @@ export default function HomeScreen() {
             style={styles.item}
             onPress={() =>
               router.push({
-                pathname: "/chat",
+                pathname: "/chat/page",
                 params: {
                   conversationId: item.id,
                   userId: item.otherUser.id,
