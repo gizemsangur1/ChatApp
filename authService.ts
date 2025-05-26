@@ -4,8 +4,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { auth } from "./firebaseConfig";
-import { db } from "./firebaseConfig"; 
+import { auth, db } from "./firebaseConfig";
 
 export const register = async (
   email: string,
@@ -26,7 +25,7 @@ export const register = async (
     createdAt: Date.now(),
   });
 
-  return user;
+  return userCredential;
 };
 
 export const login = (email: string, password: string) => {

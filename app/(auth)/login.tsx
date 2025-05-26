@@ -1,3 +1,4 @@
+import { setUser } from "@/store/authSlice";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -8,16 +9,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useDispatch } from "react-redux";
 import { login } from "../../authService";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const dispatch = useDispatch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleLogin = async () => {
     try {
-      await login(email, password);
+      const userCredential = await login(email, password);
+      const user = userCredential.user;
+
+      // Redux'a yaz
+      dispatch(setUser({
+        uid: user.uid,
+        email: user.email ?? "",
+        displayName: user.displayName ?? "",
+      }));
+
       router.replace("/");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -41,23 +53,23 @@ export default function LoginScreen() {
       <TextInput
         placeholder="Email"
         onChangeText={setEmail}
-        style={{ width: "85%", marginVertical: 10,color:"black",height:35 }}
+        style={{ width: "85%", marginVertical: 10, color: "black", height: 35 }}
       />
       <TextInput
         placeholder="Password"
         secureTextEntry
         onChangeText={setPassword}
-        style={{ width: "85%", marginVertical: 10 ,color:"black",height:35}}
+        style={{ width: "85%", marginVertical: 10, color: "black", height: 35 }}
       />
       <TouchableOpacity
         onPress={handleLogin}
         style={[styles.button, { backgroundColor: "black" }]}
       >
-        <Text style={[styles.text, { color: "white" }]}>
-          Login
-        </Text>
+        <Text style={[styles.text, { color: "white" }]}>Login</Text>
       </TouchableOpacity>
-      <Text onPress={() => router.push("/register")} style={{color:"black"}}>Hesabın yokm mu</Text>
+      <Text onPress={() => router.push("/register")} style={{ color: "black" }}>
+        Hesabın yok mu?
+      </Text>
     </View>
   );
 }

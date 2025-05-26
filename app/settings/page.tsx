@@ -1,12 +1,15 @@
 import { logout } from "@/authService";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/firebaseConfig";
+import { logout as reduxLogout } from "@/store/authSlice";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, useRouter } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
 import { useEffect, useState } from "react";
-import { Button, Image, StyleSheet, Text, View } from "react-native";
+import { Alert, Button, Image, StyleSheet, Text, View } from "react-native";
+import { useDispatch } from "react-redux";
+
 
 type UserInfo = {
   id: string;
@@ -21,6 +24,7 @@ export default function SettingsScreen() {
   const [userInfo, setUserInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const dispatch=useDispatch();
 
   useEffect(() => {
 	if (!user?.uid) return;
@@ -73,14 +77,15 @@ export default function SettingsScreen() {
 	}
   };
 
-const handleLogout = async () => {
-  try {
-    await logout();
-    router.replace("/(auth)/login"); 
-  } catch (error) {
-    console.error("Çıkış hatası:", error);
-  }
-};
+ const handleLogout = async () => {
+    try {
+      await logout(); 
+      dispatch(reduxLogout()); 
+      router.replace("/login"); 
+    } catch (err) {
+      Alert.alert("Çıkış Hatası", "Çıkış sırasında bir hata oluştu.");
+    }
+  };
 
   if (!user) return <Redirect href="/login" />;
 
