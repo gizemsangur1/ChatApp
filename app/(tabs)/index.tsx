@@ -78,15 +78,15 @@ export default function HomeScreen() {
                 pathname: "/chat/page",
                 params: {
                   conversationId: item.id,
-                  userId: item.otherUser.id,
+                  userId: item.otherUser?.id,
                 },
               })
             }
           >
             <Text style={styles.nameText}>
-              {item.otherUser.firstName} {item.otherUser.lastName}
+              {item.otherUser?.firstName} {item.otherUser?.lastName}
             </Text>
-            <Text style={styles.usernameText}>@{item.otherUser.username}</Text>
+            <Text style={styles.usernameText}>@{item.otherUser?.username}</Text>
           </TouchableOpacity>
         )}
       />

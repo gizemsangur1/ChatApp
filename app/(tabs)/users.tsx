@@ -1,9 +1,9 @@
-import { View, Text, FlatList, TouchableOpacity } from "react-native";
-import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
+import { db } from "@/firebaseConfig";
 import { useRouter } from "expo-router";
+import { addDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
 
 type UserItem = {
   id: string;
@@ -73,7 +73,7 @@ export default function UsersScreen() {
               if (!user?.uid) return;
               const conversationId = await startConversation(user.uid, item.id);
               router.push({
-                pathname: "/chat",
+                pathname: "/chat/page",
                 params: {
                   conversationId,
                   userId: item.id,
