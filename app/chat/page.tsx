@@ -28,7 +28,7 @@ import {
 
 type Message = {
   id: string;
-  text: string;
+  text?: string;
   senderId: string;
   createdAt: any;
   imageUrl?: string[];
@@ -82,16 +82,31 @@ export default function ChatScreen() {
   }, [userId]);
 
   const sendMessage = async () => {
-    if (!input.trim() || !user?.uid) return;
+    if (!user?.uid) return;
+
+    const trimmedText = input.trim();
+    const hasText = trimmedText.length > 0;
+    const hasImages = images.length > 0;
+
+    if (!hasText && !hasImages) return;
+
+    const messagePayload: Message = {
+      senderId: user.uid,
+      id: user.uid,
+      createdAt: serverTimestamp(),
+    };
+
+    if (hasText) {
+      messagePayload.text = trimmedText;
+    }
+
+    if (hasImages) {
+      messagePayload.imageUrl = images;
+    }
 
     await addDoc(
       collection(db, "conversations", String(conversationId), "messages"),
-      {
-        text: input,
-        imageUrl: images || null,
-        senderId: user.uid,
-        createdAt: serverTimestamp(),
-      }
+      messagePayload
     );
 
     setInput("");
@@ -295,10 +310,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timestamp: {
-  fontSize: 10,
-  color: "#ddd",
-  marginTop: 4,
-  alignSelf: "flex-end",
-},
-
+    fontSize: 10,
+    color: "#ddd",
+    marginTop: 4,
+    alignSelf: "flex-end",
+  },
 });
