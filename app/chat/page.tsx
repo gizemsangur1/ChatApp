@@ -1,55 +1,58 @@
-import { useAuth } from "@/context/AuthContext";
-import { db } from "@/firebaseConfig";
-import { formatTimestamp } from "@/hooks/generalFunctions";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams } from "expo-router";
 import {
-	addDoc,
-	collection,
-	doc,
-	getDoc,
-	onSnapshot,
-	orderBy,
-	query,
-	serverTimestamp,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
-	Alert,
-	FlatList,
-	Image,
-	StyleSheet,
-	Text,
-	TextInput,
-	TouchableOpacity,
-	View,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
-type Message = {
-  id: string;
-  text?: string;
-  senderId: string;
-  createdAt: any;
-  imageUrl?: string[];
-};
+import { useAuth } from "@/context/AuthContext";
+import { db } from "@/firebaseConfig";
+import { formatTimestamp } from "@/hooks/generalFunctions";
 
-type OtherUser = {
-  firstName?: string;
-  lastName?: string;
-  username?: string;
-};
+import {
+  removeImage,
+  setActiveConversation,
+  setImages,
+  setMessages,
+  setOtherUser,
+} from "@/store/chatSlice";
+import { RootState } from "@/store/store";
+import { useDispatch, useSelector } from "react-redux";
 
 export default function ChatScreen() {
   const { conversationId, userId } = useLocalSearchParams();
   const { user } = useAuth();
+  const dispatch = useDispatch();
+
+  const messages = useSelector((state: RootState) => state.chat.messages);
+  const otherUser = useSelector((state: RootState) => state.chat.otherUser);
+  const images = useSelector((state: RootState) => state.chat.images);
+
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
-  const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
     if (!conversationId) return;
+
+    dispatch(setActiveConversation(String(conversationId)));
 
     const q = query(
       collection(db, "conversations", String(conversationId), "messages"),
@@ -60,8 +63,9 @@ export default function ChatScreen() {
       const msgs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      })) as Message[];
-      setMessages(msgs);
+      })) as any;
+
+      dispatch(setMessages(msgs));
     });
 
     return unsubscribe;
@@ -74,12 +78,45 @@ export default function ChatScreen() {
       const ref = doc(db, "users", String(userId));
       const snapshot = await getDoc(ref);
       if (snapshot.exists()) {
-        setOtherUser(snapshot.data() as OtherUser);
+        dispatch(setOtherUser(snapshot.data()));
       }
     };
 
     fetchOtherUser();
   }, [userId]);
+
+  useEffect(() => {
+    if (!conversationId || !user?.uid) return;
+
+    const q = query(
+      collection(db, "conversations", String(conversationId), "messages"),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const batch = snapshot.docs.slice(0, 10);
+
+      for (const docSnap of batch) {
+        const data = docSnap.data();
+        const seenBy: string[] = data.seenBy ?? [];
+
+        if (data.senderId !== user.uid && !seenBy.includes(user.uid)) {
+          const messageRef = doc(
+            db,
+            "conversations",
+            String(conversationId),
+            "messages",
+            docSnap.id
+          );
+          await updateDoc(messageRef, {
+            seenBy: [...seenBy, user.uid],
+          });
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [conversationId, user?.uid]);
 
   const sendMessage = async () => {
     if (!user?.uid) return;
@@ -90,19 +127,15 @@ export default function ChatScreen() {
 
     if (!hasText && !hasImages) return;
 
-    const messagePayload: Message = {
+    const messagePayload: any = {
       senderId: user.uid,
       id: user.uid,
       createdAt: serverTimestamp(),
+      seenBy: [user.uid], 
     };
 
-    if (hasText) {
-      messagePayload.text = trimmedText;
-    }
-
-    if (hasImages) {
-      messagePayload.imageUrl = images;
-    }
+    if (hasText) messagePayload.text = trimmedText;
+    if (hasImages) messagePayload.imageUrl = images;
 
     await addDoc(
       collection(db, "conversations", String(conversationId), "messages"),
@@ -110,7 +143,7 @@ export default function ChatScreen() {
     );
 
     setInput("");
-    setImages([]);
+    dispatch(setImages([]));
   };
 
   const handleImage = async () => {
@@ -131,12 +164,12 @@ export default function ChatScreen() {
 
     if (!result.canceled && result.assets?.length > 0) {
       const selectedUris = result.assets.map((asset) => asset.uri);
-      setImages((prev) => [...prev, ...selectedUris]);
+      dispatch(setImages([...images, ...selectedUris]));
     }
   };
 
   const cancelImage = (indexToRemove: number) => {
-    setImages((prev) => prev.filter((_, index) => index !== indexToRemove));
+    dispatch(removeImage(indexToRemove));
   };
 
   return (
@@ -158,9 +191,7 @@ export default function ChatScreen() {
                 : styles.theirMessage,
             ]}
           >
-            {item.text ? (
-              <Text style={{ color: "#fff" }}>{item.text}</Text>
-            ) : null}
+            {item.text && <Text style={{ color: "#fff" }}>{item.text}</Text>}
 
             {item.imageUrl && Array.isArray(item.imageUrl) && (
               <View style={styles.messageImageContainer}>
@@ -173,17 +204,22 @@ export default function ChatScreen() {
                 ))}
               </View>
             )}
+
             {item.createdAt && (
               <Text style={styles.timestamp}>
                 {formatTimestamp(item.createdAt)}
               </Text>
+            )}
+
+            {item.senderId === user?.uid && item.seenBy?.length > 1 && (
+              <Text style={styles.seenLabel}>Görüldü</Text>
             )}
           </View>
         )}
         keyExtractor={(item) => item.id}
       />
 
-      <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-end" }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         {images.map((uri, index) => (
           <View key={index} style={styles.imageWrapper}>
             <Image source={{ uri }} style={styles.previewImage} />
@@ -250,7 +286,6 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: 20,
     marginRight: 8,
-    color: "black",
     justifyContent: "space-between",
     alignItems: "center",
     flexDirection: "row",
@@ -275,18 +310,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginLeft: 6,
   },
-  previewContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginVertical: 4,
-  },
-
   imageWrapper: {
     position: "relative",
     marginRight: 6,
     marginBottom: 6,
   },
-
   closeButton: {
     position: "absolute",
     top: -6,
@@ -301,7 +329,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 4,
   },
-
   messageImage: {
     width: 100,
     height: 100,
@@ -313,6 +340,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#ddd",
     marginTop: 4,
+    alignSelf: "flex-end",
+  },
+  seenLabel: {
+    fontSize: 10,
+    color: "lightgreen",
+    marginTop: 2,
     alignSelf: "flex-end",
   },
 });
