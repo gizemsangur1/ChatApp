@@ -1,16 +1,26 @@
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/firebaseConfig";
+import { formatTimestamp } from "@/hooks/generalFunctions";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
+  Timestamp,
   where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type Conversation = {
   id: string;
@@ -21,6 +31,8 @@ type Conversation = {
     lastName?: string;
     username?: string;
   };
+  lastMessageText?: string;
+  lastMessageTime?: Date | null;
 };
 
 export default function HomeScreen() {
@@ -42,7 +54,9 @@ export default function HomeScreen() {
 
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
-        const otherUserId = data.participants.find((uid: string) => uid !== user.uid);
+        const otherUserId = data.participants.find(
+          (uid: string) => uid !== user.uid
+        );
         if (!otherUserId) continue;
 
         const userDoc = await getDoc(doc(db, "users", otherUserId));
@@ -50,10 +64,38 @@ export default function HomeScreen() {
           ? { id: userDoc.id, ...userDoc.data() }
           : { id: otherUserId };
 
+        const messagesRef = collection(
+          db,
+          "conversations",
+          docSnap.id,
+          "messages"
+        );
+        const lastMsgQuery = query(
+          messagesRef,
+          orderBy("createdAt", "desc"),
+          limit(1)
+        );
+        const lastMsgSnapshot = await getDocs(lastMsgQuery);
+
+        let lastMessageText = "";
+        let lastMessageTime = null;
+
+        if (!lastMsgSnapshot.empty) {
+          const lastMessage = lastMsgSnapshot.docs[0].data();
+          lastMessageText =
+            lastMessage.text || (lastMessage.imageUrl ? "📷 Resim" : "");
+          lastMessageTime =
+            lastMessage.createdAt instanceof Timestamp
+              ? lastMessage.createdAt.toDate()
+              : null;
+        }
+
         fetched.push({
           id: docSnap.id,
           participants: data.participants,
           otherUser,
+          lastMessageText,
+          lastMessageTime,
         });
       }
 
@@ -83,10 +125,25 @@ export default function HomeScreen() {
               })
             }
           >
-            <Text style={styles.nameText}>
-              {item.otherUser?.firstName} {item.otherUser?.lastName}
-            </Text>
-            <Text style={styles.usernameText}>@{item.otherUser?.username}</Text>
+            <View>
+              <Text style={styles.nameText}>
+                {item.otherUser?.firstName} {item.otherUser?.lastName}
+              </Text>
+              <Text style={styles.usernameText}>
+                @{item.otherUser?.username}
+              </Text>
+            </View>
+
+            {item?.lastMessageText && item?.lastMessageTime ? (
+              <View>
+                <Text style={styles.lastMessageText} numberOfLines={1}>
+                  {item.lastMessageText}
+                </Text>
+                <Text style={styles.lastMessageText} numberOfLines={1}>
+                  {formatTimestamp(item.lastMessageTime)}
+                </Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
         )}
       />
@@ -101,6 +158,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   item: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderColor: "#ccc",
@@ -112,5 +172,10 @@ const styles = StyleSheet.create({
   usernameText: {
     fontSize: 14,
     color: "gray",
+  },
+  lastMessageText: {
+    fontSize: 13,
+    color: "#666",
+    marginTop: 4,
   },
 });
