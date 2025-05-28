@@ -10,7 +10,7 @@ export default function RootLayout() {
   return (
     <Stack
       screenOptions={({ route }) => {
-        const hideBackFor = ["/login", "/register"];
+        const hideBackFor = ["(auth)/login", "(auth)/register"];
         const isAuthScreen = hideBackFor.includes("/" + route.name);
 
         return {

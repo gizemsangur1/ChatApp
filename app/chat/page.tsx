@@ -63,6 +63,7 @@ export default function ChatScreen() {
     null
   );
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -321,8 +322,12 @@ export default function ChatScreen() {
       )}
 
       <FlatList
+        ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item.id}
+        onContentSizeChange={() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }}
         renderItem={({ item }) => {
           const isMyMessage = item.senderId === user?.uid;
 
@@ -335,12 +340,11 @@ export default function ChatScreen() {
                   {item.imageUrl.map((uri: string, idx: number) => (
                     <TouchableOpacity onPress={() => handleImageOpen(uri)}>
                       <Image
-                      key={idx}
-                      source={{ uri }}
-                      style={styles.messageImage}
-                    />
+                        key={idx}
+                        source={{ uri }}
+                        style={styles.messageImage}
+                      />
                     </TouchableOpacity>
-                    
                   ))}
                 </View>
               )}
@@ -392,8 +396,8 @@ export default function ChatScreen() {
               onLongPress={() => {
                 setSelectedMessageId(item.id);
                 setContextMenuVisible(true);
-               
-                setMenuPosition({ x: 100, y: 500 }); 
+
+                setMenuPosition({ x: 100, y: 500 });
               }}
               activeOpacity={0.8}
             >
