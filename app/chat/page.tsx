@@ -334,11 +334,14 @@ export default function ChatScreen() {
               {item.imageUrl && Array.isArray(item.imageUrl) && (
                 <View style={styles.messageImageContainer}>
                   {item.imageUrl.map((uri: string, idx: number) => (
-                    <Image
+                    <TouchableOpacity onPress={() => handleImageOpen(uri)}>
+                      <Image
                       key={idx}
                       source={{ uri }}
                       style={styles.messageImage}
                     />
+                    </TouchableOpacity>
+                    
                   ))}
                 </View>
               )}
