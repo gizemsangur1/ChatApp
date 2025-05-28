@@ -92,9 +92,9 @@ export default function CustomAudioPlayer({ src }: { src: string }) {
         onChange={handleSliderChange}
         style={{ flex: 1 }}
       />
-      <span style={{ color: "#fff", fontSize: "12px" }}>
+      {/* <span style={{ color: "#fff", fontSize: "12px" }}>
         {formatTime(progress)} / {formatTime(duration)}
-      </span>
+      </span> */}
       <audio
         ref={audioRef}
         src={src}

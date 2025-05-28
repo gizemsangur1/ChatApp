@@ -210,7 +210,6 @@ export default function ChatScreen() {
 
   const handleImageOpen = (uri: string) => {
     setImageOpen(uri);
-    console.log("clicked");
   };
 
   const handleVoiceNote = async () => {
