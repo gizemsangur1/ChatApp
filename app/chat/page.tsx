@@ -12,11 +12,12 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
   Image,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -29,13 +30,16 @@ import { db } from "@/firebaseConfig";
 import { formatTimestamp } from "@/hooks/generalFunctions";
 
 import {
+  clearVoice,
   removeImage,
   setActiveConversation,
   setImages,
   setMessages,
   setOtherUser,
+  setVoice,
 } from "@/store/chatSlice";
 import { RootState } from "@/store/store";
+import { Audio } from "expo-av";
 import { useDispatch, useSelector } from "react-redux";
 
 export default function ChatScreen() {
@@ -48,6 +52,10 @@ export default function ChatScreen() {
   const images = useSelector((state: RootState) => state.chat.images);
 
   const [input, setInput] = useState("");
+  const [imageOpen, setImageOpen] = useState<string | null>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -118,24 +126,28 @@ export default function ChatScreen() {
     return unsubscribe;
   }, [conversationId, user?.uid]);
 
+  const voiceUri = useSelector((state: RootState) => state.chat.voices);
+
   const sendMessage = async () => {
     if (!user?.uid) return;
 
     const trimmedText = input.trim();
     const hasText = trimmedText.length > 0;
     const hasImages = images.length > 0;
+    const hasVoice = !!voiceUri;
 
-    if (!hasText && !hasImages) return;
+    if (!hasText && !hasImages && !hasVoice) return;
 
     const messagePayload: any = {
       senderId: user.uid,
       id: user.uid,
       createdAt: serverTimestamp(),
-      seenBy: [user.uid], 
+      seenBy: [user.uid],
     };
 
     if (hasText) messagePayload.text = trimmedText;
     if (hasImages) messagePayload.imageUrl = images;
+    if (hasVoice) messagePayload.voiceUrl = voiceUri;
 
     await addDoc(
       collection(db, "conversations", String(conversationId), "messages"),
@@ -144,6 +156,23 @@ export default function ChatScreen() {
 
     setInput("");
     dispatch(setImages([]));
+    dispatch(clearVoice());
+
+    if (Platform.OS !== "web" && recording) {
+      try {
+        await recording.stopAndUnloadAsync();
+        setRecording(null);
+        setIsRecording(false);
+      } catch (err) {
+        console.warn("Kayıt durdurulurken hata:", err);
+      }
+    }
+
+    if (Platform.OS === "web" && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+      setIsRecording(false);
+    }
   };
 
   const handleImage = async () => {
@@ -170,6 +199,91 @@ export default function ChatScreen() {
 
   const cancelImage = (indexToRemove: number) => {
     dispatch(removeImage(indexToRemove));
+  };
+
+  const handleImageOpen = (uri: string) => {
+    setImageOpen(uri);
+    console.log("clicked");
+  };
+
+  const handleVoiceNote = async () => {
+    try {
+      if (isRecording) {
+        setIsRecording(false);
+
+        if (Platform.OS === "web") {
+          mediaRecorderRef.current?.stop();
+        } else {
+          await recording?.stopAndUnloadAsync();
+          const uri = recording?.getURI();
+          if (uri) dispatch(setVoice(uri));
+        }
+
+        setRecording(null);
+        return;
+      }
+
+      if (Platform.OS === "web") {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        const chunks: BlobPart[] = [];
+
+        mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(chunks, { type: "audio/webm" });
+          const url = URL.createObjectURL(blob);
+          dispatch(setVoice(url));
+        };
+
+        mediaRecorder.start();
+      } else {
+        const { granted } = await Audio.requestPermissionsAsync();
+        if (!granted) {
+          Alert.alert("İzin Gerekli", "Ses kaydı için izin gerekli.");
+          return;
+        }
+
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
+        const newRecording = new Audio.Recording();
+        await newRecording.prepareToRecordAsync({
+          android: {
+            extension: ".m4a",
+            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+            audioEncoder: Audio.AndroidAudioEncoder.AAC,
+            sampleRate: 44100,
+            numberOfChannels: 2,
+            bitRate: 128000,
+          },
+          ios: {
+            extension: ".caf",
+            audioQuality: Audio.IOSAudioQuality.HIGH,
+            sampleRate: 44100,
+            numberOfChannels: 2,
+            bitRate: 128000,
+            linearPCMBitDepth: 16,
+            linearPCMIsBigEndian: false,
+            linearPCMIsFloat: false,
+          },
+          web: {},
+        });
+
+        await newRecording.startAsync();
+        setRecording(newRecording);
+      }
+
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Ses kaydı hatası:", error);
+    }
   };
 
   return (
@@ -222,7 +336,10 @@ export default function ChatScreen() {
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         {images.map((uri, index) => (
           <View key={index} style={styles.imageWrapper}>
-            <Image source={{ uri }} style={styles.previewImage} />
+            <TouchableOpacity onPress={() => handleImageOpen(uri)}>
+              <Image source={{ uri }} style={styles.previewImage} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => cancelImage(index)}
@@ -238,6 +355,12 @@ export default function ChatScreen() {
           <TouchableOpacity style={{ marginLeft: 10 }} onPress={handleImage}>
             <Ionicons name="image-outline" size={24} color="black" />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={{ marginLeft: 10 }}
+            onPress={handleVoiceNote}
+          >
+            <Ionicons name="mic-outline" size={24} color="black" />
+          </TouchableOpacity>
 
           <TextInput
             placeholder="Mesaj..."
@@ -251,6 +374,22 @@ export default function ChatScreen() {
           <Text style={{ color: "white" }}>Gönder</Text>
         </TouchableOpacity>
       </View>
+      {imageOpen && (
+        <View style={styles.fullscreenOverlay}>
+          <View style={styles.overlayBackground} />
+          <TouchableOpacity
+            style={styles.fullscreenImageWrapper}
+            activeOpacity={1}
+            onPress={() => setImageOpen(null)}
+          >
+            <Image
+              source={{ uri: imageOpen }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -347,5 +486,35 @@ const styles = StyleSheet.create({
     color: "lightgreen",
     marginTop: 2,
     alignSelf: "flex-end",
+  },
+  fullscreenOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999, // daha yüksek olsun
+  },
+
+  overlayBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    zIndex: 1,
+  },
+
+  fullscreenImageWrapper: {
+    zIndex: 2,
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  fullscreenImage: {
+    width: "90%",
+    height: "70%",
+    borderRadius: 12,
   },
 });

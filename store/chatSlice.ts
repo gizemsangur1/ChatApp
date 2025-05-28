@@ -6,7 +6,8 @@ type Message = {
   senderId: string;
   createdAt: any;
   imageUrl?: string[];
-  seenBy:[];
+  voiceUrl?: string;
+  seenBy: [];
 };
 
 type OtherUser = {
@@ -19,6 +20,7 @@ interface ChatState {
   messages: Message[];
   otherUser: OtherUser | null;
   images: string[];
+  voices: string;
   activeConversationId: string | null;
 }
 
@@ -26,6 +28,7 @@ const initialState: ChatState = {
   messages: [],
   otherUser: null,
   images: [],
+  voices: "",
   activeConversationId: null,
 };
 
@@ -45,8 +48,15 @@ const chatSlice = createSlice({
     setImages(state, action: PayloadAction<string[]>) {
       state.images = action.payload;
     },
+
     removeImage(state, action: PayloadAction<number>) {
       state.images.splice(action.payload, 1);
+    },
+    setVoice(state, action: PayloadAction<string>) {
+      state.voices = action.payload;
+    },
+    clearVoice(state) {
+      state.voices = "";
     },
     setActiveConversation(state, action: PayloadAction<string>) {
       state.activeConversationId = action.payload;
@@ -66,6 +76,8 @@ export const {
   setOtherUser,
   setImages,
   removeImage,
+  setVoice,
+  clearVoice,
   setActiveConversation,
   resetChat,
 } = chatSlice.actions;
