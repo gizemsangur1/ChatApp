@@ -4,6 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -12,7 +13,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -29,6 +30,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/firebaseConfig";
 import { formatTimestamp } from "@/hooks/generalFunctions";
 
+import CustomAudioPlayer from "@/components/CustomPlayer";
 import {
   clearVoice,
   removeImage,
@@ -56,6 +58,11 @@ export default function ChatScreen() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null
+  );
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!conversationId) return;
@@ -227,9 +234,12 @@ export default function ChatScreen() {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
 
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: "audio/webm;codecs=opus",
+        });
+
+        mediaRecorderRef.current = mediaRecorder;
         const chunks: BlobPart[] = [];
 
         mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
@@ -286,6 +296,23 @@ export default function ChatScreen() {
     }
   };
 
+  const deleteMessage = async () => {
+    if (!conversationId || !selectedMessageId) return;
+
+    await deleteDoc(
+      doc(
+        db,
+        "conversations",
+        String(conversationId),
+        "messages",
+        selectedMessageId
+      )
+    );
+
+    setContextMenuVisible(false);
+    setSelectedMessageId(null);
+  };
+
   return (
     <View style={{ flex: 1, padding: 10 }}>
       {otherUser && (
@@ -296,41 +323,89 @@ export default function ChatScreen() {
 
       <FlatList
         data={messages}
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.messageBubble,
-              item.senderId === user?.uid
-                ? styles.myMessage
-                : styles.theirMessage,
-            ]}
-          >
-            {item.text && <Text style={{ color: "#fff" }}>{item.text}</Text>}
-
-            {item.imageUrl && Array.isArray(item.imageUrl) && (
-              <View style={styles.messageImageContainer}>
-                {item.imageUrl.map((uri: string, idx: number) => (
-                  <Image
-                    key={idx}
-                    source={{ uri }}
-                    style={styles.messageImage}
-                  />
-                ))}
-              </View>
-            )}
-
-            {item.createdAt && (
-              <Text style={styles.timestamp}>
-                {formatTimestamp(item.createdAt)}
-              </Text>
-            )}
-
-            {item.senderId === user?.uid && item.seenBy?.length > 1 && (
-              <Text style={styles.seenLabel}>Görüldü</Text>
-            )}
-          </View>
-        )}
         keyExtractor={(item) => item.id}
+        renderItem={({ item }) => {
+          const isMyMessage = item.senderId === user?.uid;
+
+          const commonContent = (
+            <>
+              {item.text && <Text style={{ color: "#fff" }}>{item.text}</Text>}
+
+              {item.imageUrl && Array.isArray(item.imageUrl) && (
+                <View style={styles.messageImageContainer}>
+                  {item.imageUrl.map((uri: string, idx: number) => (
+                    <Image
+                      key={idx}
+                      source={{ uri }}
+                      style={styles.messageImage}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {item.createdAt && (
+                <Text style={styles.timestamp}>
+                  {formatTimestamp(item.createdAt)}
+                </Text>
+              )}
+
+              {isMyMessage && item.seenBy?.length > 1 && (
+                <Text style={styles.seenLabel}>Görüldü</Text>
+              )}
+
+              {item.voiceUrl && (
+                <View style={{ marginTop: 8 }}>
+                  <CustomAudioPlayer src={item.voiceUrl!} />
+                </View>
+              )}
+            </>
+          );
+
+          if (Platform.OS === "web") {
+            return (
+              <div
+                onContextMenu={(e: React.MouseEvent<HTMLDivElement>) => {
+                  e.preventDefault();
+                  setSelectedMessageId(item.id);
+                  setMenuPosition({ x: e.pageX, y: e.pageY });
+                  setContextMenuVisible(true);
+                }}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  margin: 4,
+                  maxWidth: "75%",
+                  backgroundColor: isMyMessage ? "#4e4cb8" : "#888",
+                  alignSelf: isMyMessage ? "flex-end" : "flex-start",
+                  color: "#fff",
+                }}
+              >
+                {commonContent}
+              </div>
+            );
+          }
+
+          return (
+            <TouchableOpacity
+              onLongPress={() => {
+                setSelectedMessageId(item.id);
+                setContextMenuVisible(true);
+               
+                setMenuPosition({ x: 100, y: 500 }); 
+              }}
+              activeOpacity={0.8}
+            >
+              <View
+                style={[
+                  styles.messageBubble,
+                  isMyMessage ? styles.myMessage : styles.theirMessage,
+                ]}
+              >
+                {commonContent}
+              </View>
+            </TouchableOpacity>
+          );
+        }}
       />
 
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
@@ -388,6 +463,33 @@ export default function ChatScreen() {
               resizeMode="contain"
             />
           </TouchableOpacity>
+          {contextMenuVisible && (
+            <View
+              style={{
+                position: "absolute",
+                top: menuPosition.y,
+                left: menuPosition.x,
+                backgroundColor: "#fff",
+                borderRadius: 6,
+                padding: 10,
+                shadowColor: "#000",
+                shadowOpacity: 0.2,
+                shadowOffset: { width: 0, height: 2 },
+                elevation: 5,
+                zIndex: 9999,
+              }}
+            >
+              <TouchableOpacity onPress={deleteMessage}>
+                <Text style={{ color: "red", fontWeight: "bold" }}>Sil</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setContextMenuVisible(false)}
+                style={{ marginTop: 6 }}
+              >
+                <Text style={{ color: "gray" }}>İptal</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -495,7 +597,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 9999, // daha yüksek olsun
+    zIndex: 9999,
   },
 
   overlayBackground: {
