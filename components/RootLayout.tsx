@@ -10,8 +10,17 @@ export default function RootLayout() {
   return (
     <Stack
       screenOptions={({ route }) => {
-        const hideBackFor = ["(auth)/login", "(auth)/register","settings"];
+        const hideBackFor = [
+          "(auth)/login",
+          "(auth)/register",
+          "settings/page",
+        ];
         const isAuthScreen = hideBackFor.includes("/" + route.name);
+        const hiddenHeaderRoutes = ["(auth)/", "settings"];
+
+        const isHiddenHeader = hiddenHeaderRoutes.some((prefix) =>
+          route.name.startsWith(prefix)
+        );
 
         return {
           headerStyle: {
@@ -21,9 +30,9 @@ export default function RootLayout() {
           headerTitleStyle: {
             fontWeight: "bold",
           },
-          headerBackVisible: !isAuthScreen,
+          headerBackVisible: !isHiddenHeader,
           headerRight: () =>
-            !isAuthScreen && user ? (
+            !isHiddenHeader && user ? (
               <TouchableOpacity
                 onPress={() => router.push("/settings/page")}
                 style={{ marginRight: 12 }}

@@ -1,6 +1,8 @@
 import { login } from "@/authService";
+import { db } from "@/firebaseConfig";
 import { setUser } from "@/store/authSlice";
 import { useRouter } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
 import { useState } from "react";
 import {
   Alert,
@@ -23,11 +25,26 @@ export default function LoginScreen() {
       const userCredential = await login(email, password);
       const user = userCredential.user;
 
-      dispatch(setUser({
-        uid: user.uid,
-        email: user.email ?? "",
-        displayName: user.displayName ?? "",
-      }));
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        throw new Error("Kullanıcı bilgileri bulunamadı.");
+      }
+
+      const userData = userDocSnap.data();
+
+      dispatch(
+        setUser({
+          uid: user.uid,
+          email: user.email ?? "",
+          displayName: user.displayName ?? "",
+          firstName: userData.firstName ?? "",
+          lastName: userData.lastName ?? "",
+          username: userData.username ?? "",
+          photoURL: userData.photoURL ?? "",
+        })
+      );
 
       router.replace("/");
     } catch (err: unknown) {

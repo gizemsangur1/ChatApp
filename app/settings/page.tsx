@@ -1,13 +1,14 @@
 import { logout } from "@/authService";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/firebaseConfig";
-import { logout as reduxLogout } from "@/store/authSlice";
+import { logout as reduxLogout, setUser } from "@/store/authSlice";
+import { RootState } from "@/store/store";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, useRouter } from "expo-router";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
 	Alert,
 	Image,
@@ -16,24 +17,27 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 
-type UserInfo = {
-  id: string;
+type User = {
+  uid: string;
   email: string;
-  firstName?: string;
-  lastName?: string;
-  photoURL?: string;
+  displayName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  photoURL?: string | null;
 };
 
 export default function SettingsScreen() {
+  const userInfo = useSelector((state: RootState) => state.auth.user);
   const { user } = useAuth();
-  const [userInfo, setUserInfo] = useState<any>(null);
+  /*  const [userInfo, setUserInfo] = useState<any>(null); */
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const dispatch = useDispatch();
 
-  useEffect(() => {
+  /*  useEffect(() => {
     if (!user?.uid) return;
 
     const fetchUser = async () => {
@@ -45,7 +49,7 @@ export default function SettingsScreen() {
     };
 
     fetchUser();
-  }, [user]);
+  }, [user]); */
 
   const pickImage = async () => {
     if (!user) return;
@@ -73,10 +77,17 @@ export default function SettingsScreen() {
         photoURL: downloadURL,
       });
 
-      setUserInfo((prev: UserInfo | null) => ({
-        ...(prev || {}),
-        photoURL: downloadURL,
-      }));
+      dispatch(
+        setUser({
+          uid: user.uid,
+          email: user.email ?? "",
+          displayName: user.displayName ?? undefined,
+          firstName: userInfo?.firstName ?? undefined,
+          lastName: userInfo?.lastName ?? undefined,
+          username: userInfo?.username ?? undefined,
+          photoURL: downloadURL ?? undefined,
+        })
+      );
     } catch (error) {
       console.error("Profil fotoğrafı yükleme hatası:", error);
     } finally {
