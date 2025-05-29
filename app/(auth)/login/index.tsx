@@ -1,3 +1,4 @@
+import { login } from "@/authService";
 import { setUser } from "@/store/authSlice";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -10,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { useDispatch } from "react-redux";
-import { login } from "../../authService";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -23,7 +23,6 @@ export default function LoginScreen() {
       const userCredential = await login(email, password);
       const user = userCredential.user;
 
-      // Redux'a yaz
       dispatch(setUser({
         uid: user.uid,
         email: user.email ?? "",

@@ -1,3 +1,4 @@
+import { register } from "@/authService";
 import { setUser } from "@/store/authSlice";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -10,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { useDispatch } from "react-redux";
-import { register } from "../../authService";
 
 export default function RegisterScreen() {
   const router = useRouter();

@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/firebaseConfig";
 import { formatTimestamp } from "@/hooks/generalFunctions";
+import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
@@ -18,6 +19,7 @@ import {
   FlatList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -39,6 +41,18 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
+
+  const filteredConversations = conversations.filter((item) => {
+    const fullName = `${item.otherUser?.firstName || ""} ${
+      item.otherUser?.lastName || ""
+    }`.toLowerCase();
+    const username = item.otherUser?.username?.toLowerCase() || "";
+    const search = searchText.toLowerCase();
+
+    return fullName.includes(search) || username.includes(search);
+  });
 
   if (!user) return <Redirect href="/login" />;
 
@@ -106,11 +120,32 @@ export default function HomeScreen() {
   }, [user]);
 
   return (
-    <View style={{ flex: 1, padding: 16 }}>
+    <View style={{ flex: 1, padding: 16, backgroundColor: "white" }}>
       <Text style={styles.header}>Sohbetlerim</Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          borderWidth: 1,
+          borderColor: "#ccc",
+          borderRadius: 8,
+          paddingHorizontal: 8,
+          marginBottom: 16,
+        }}
+      >
+        <TextInput
+          placeholder="Kullanıcı ara..."
+          value={searchText}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          onChangeText={setSearchText}
+          style={{ flex: 1, paddingVertical: 8,  borderColor: isFocused ? "#000" : "#ccc",borderWidth: 0 }}
+        />
+        <Ionicons name="search-outline" size={24} color="black" />
+      </View>
 
       <FlatList
-        data={conversations}
+        data={filteredConversations}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TouchableOpacity
